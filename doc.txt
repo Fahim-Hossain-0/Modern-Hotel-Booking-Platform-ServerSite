@@ -1,0 +1,4 @@
+PORT=5000
+DB_USER=fahimhossain735_db_user
+DB_PASSWORD=G7jLhqtOG4ufK97q
+DB_NAME=hotelBooking   # <-- choose your database name (create if not exist)
