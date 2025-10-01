@@ -38,6 +38,7 @@
       const usersCollection = db.collection("users");
 
       app.get("/rooms", async (req, res) => {
+
         const cursor = roomsCollection.find();
         const result = await cursor.toArray();
         res.send(result);
@@ -50,50 +51,7 @@
   });
 
 
-    
-  //     const email = req.query.email; // get ?email=value
-  //     const query = { email: email,availability: false };
-  //     const result = await roomsCollection.find(query).toArray(); // return all bookings for this email
-  //     res.send(result);
-    
-  // });
-
-// app.get('/rooms', async (req, res) => {
-//   try {
-//     const email = req.query.email;
-
-//     if (!email) {
-//       return res.status(400).send({ message: 'Email is required' });
-//     }
-
-//     // Only get rooms that:
-//     // 1. Belong to this user (email matches)
-//     // 2. Are booked (availability: false)
-//     const query = { email: email, availability: false };
-//     const bookedRooms = await roomsCollection.find(query).toArray();
-
-//     res.send(bookedRooms);
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send({ message: 'Server Error' });
-//   }
-// });
-
-// app.get('/rooms', async (req, res) => {
-//   try {
-//     const email = req.query.email;
-//     if (!email) return res.status(400).send({ message: 'Email is required' });
-
-//     // Only booked rooms
-//     const query = { email: email, availability: false };
-//     const bookedRooms = await roomsCollection.find(query).toArray();
-
-//     res.send(bookedRooms);
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send({ message: 'Server Error' });
-//   }
-// });
+ 
 
 app.get("/my-booking", async (req, res) => {
   try {
@@ -129,19 +87,37 @@ app.get("/my-booking", async (req, res) => {
     res.send(result);
   });
 
-  // app.patch('/rooms/:id', async(req,res)=>{
-  //   const id = req.params.id;
-  //   const {availability,bookedData} = req.body;
-  //   const filter = {_id: new ObjectId(id)};
-  //   const updatedDoc = {
-  //     $set: {
-  //       availability: availability, 
-  //       bookedData: bookedData
-  //     }
-  //   };  
-  //   const result = await roomsCollection.updateOne(filter,updatedDoc);
-  //   res.send(result); 
-  // })
+ 
+// Add a review for a room
+app.patch("/rooms/:id/reviews", async (req, res) => {
+  try {
+    const roomId = req.params.id;
+    const { user, rating, comment } = req.body;
+
+    const filter = { _id: new ObjectId(roomId) };
+    const updateDoc = {
+      $push: {
+        reviews: {
+          user,
+          rating,
+          comment,
+          timestamp: new Date()
+        }
+      }
+    };
+
+    const result = await roomsCollection.updateOne(filter, updateDoc);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ error: "Failed to add review" });
+  }
+});
+
+// already have this probably
+app.get("/rooms/:id", async (req, res) => {
+  const room = await roomsCollection.findOne({ _id: new ObjectId(req.params.id) });
+  res.send(room);
+});
 
 
       app.post("/users",async(req,res)=>{
