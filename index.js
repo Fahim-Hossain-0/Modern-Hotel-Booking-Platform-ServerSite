@@ -31,70 +31,100 @@
   });
 
   async function run() {
+      try {
+          const db = client.db("hotel_DB"); // <-- make sure this DB exists
+          const roomsCollection = db.collection("rooms");
+          const usersCollection = db.collection("users");
+
+          app.get("/rooms", async (req, res) => {
+              const cursor = roomsCollection.find();
+              const result = await cursor.toArray();
+              res.send(result);
+          });
+
+          app.get("/rooms/:id", async (req, res) => {
+              const id = req.params.id;
+              const result = await roomsCollection.findOne({ _id: id });
+              res.send(result);
+          });
+
+          app.get("/my-booking", async (req, res) => {
+              try {
+                  const email = req.query.email; // get email from query string
+                  if (!email) {
+                      return res
+                          .status(400)
+                          .send({ message: "Email is required" });
+                  }
+
+                  // Filter rooms by this user's email
+                  const query = { email: email };
+                  const result = await roomsCollection.find(query).toArray();
+
+                  res.send(result);
+              } catch (error) {
+                  console.error(error);
+                  res.status(500).send({ message: "Server Error" });
+              }
+          });
+
+        
+
+        
+        //     app.post('/rooms/review/:id', async (res, req) => {
+                
+        //         try {
+        //             const id = req.params.body
+        //             const { review} = req.body
+                    
+        //             if (!review) {
+        // return res.status(400).send({ error: "Review is required" });
+        // }
+
+        //             const filter = { _id: id }
+        //             const updatedDoc = {
+        //                 $push : {reviews:review}
+        //             }  
+        //             const result = await roomsCollection.updateOne(filter, updatedDoc)
+        //             res.send(result)
+        //         }
+
+                
+        //         catch (error) {
+        //                 console.log(error);
+        //         }
+        //     })
+
+// const { ObjectId } = require("mongodb"); // Make sure you import ObjectId
+
+app.post("/rooms/review/:id", async (req, res) => {
     try {
-        const db = client.db("hotel_DB"); // <-- make sure this DB exists
-        const roomsCollection = db.collection("rooms");
-        const usersCollection = db.collection("users");
+        const id = req.params.id; // get ID from URL
+        const { review } = req.body; // get review from frontend
 
-        app.get("/rooms", async (req, res) => {
-            const cursor = roomsCollection.find();
-            const result = await cursor.toArray();
-            res.send(result);
-        });
+        if (!review) {
+            return res.status(400).send({ error: "Review is required" });
+        }
 
-        app.get("/rooms/:id", async (req, res) => {
-            const id = req.params.id;
-            const result = await roomsCollection.findOne({ _id: id });
-            res.send(result);
-        });
+        const filter = { _id: id }; // convert to ObjectId if needed
+        const updateDoc = {
+            $push: { reviews: review }, // push review to reviews array
+        };
 
-        app.get("/my-booking", async (req, res) => {
-            try {
-                const email = req.query.email; // get email from query string
-                if (!email) {
-                    return res
-                        .status(400)
-                        .send({ message: "Email is required" });
-                }
+        const result = await roomsCollection.updateOne(filter, updateDoc);
 
-                // Filter rooms by this user's email
-                const query = { email: email };
-                const result = await roomsCollection.find(query).toArray();
+        if (result.modifiedCount === 0) {
+            return res
+                .status(404)
+                .send({ error: "Room not found or review not added" });
+        }
 
-                res.send(result);
-            } catch (error) {
-                console.error(error);
-                res.status(500).send({ message: "Server Error" });
-            }
-        });
-
-        
-
-        
-
-//   app.patch("/rooms/:id", async (req, res) => {
-//       try {
-//           const id = req.params.id;
-//           const { bookedBy, email, availability, bookedDate } = req.body;
-
-//           const filter = { _id: id };
-//           const updateDoc = {
-//               $set: {
-//                   bookedBy,
-//                   email,
-//                   availability,
-//                   bookedDate,
-//               },
-//           };
-
-//           const result = await roomsCollection.updateOne(filter, updateDoc);
-//           res.send(result);
-//       } catch (error) {
-//           console.error(error);
-//           res.status(500).send({ message: "Failed to update booking info" });
-//       }
-//   });
-
+        res.send({ success: true, message: "Review added successfully" });
+    } catch (error) {
+        console.error("Error adding review:", error);
+        res.status(500).send({ error: "Internal server error" });
+    }
+});
 
         
       app.patch("/rooms/:id", async (req, res) => {
