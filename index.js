@@ -70,33 +70,90 @@
 
         
 
-    app.patch("/rooms/:id", async (req, res) => {
-    const id = req.params.id;
-    const { reviews, ...otherUpdates } = req.body; // separate review from other fields
+        
 
-    const filter = { _id: new ObjectId(id) };
-    const updateDoc = {};
+//   app.patch("/rooms/:id", async (req, res) => {
+//       try {
+//           const id = req.params.id;
+//           const { bookedBy, email, availability, bookedDate } = req.body;
 
-    // If there's a review, push it to the reviews array
-    if (reviews) {
-        updateDoc.$push = { reviews: reviews };
-    }
+//           const filter = { _id: id };
+//           const updateDoc = {
+//               $set: {
+//                   bookedBy,
+//                   email,
+//                   availability,
+//                   bookedDate,
+//               },
+//           };
 
-    // Add other updates (like availability, bookedDate, etc.)
-    if (Object.keys(otherUpdates).length > 0) {
-        updateDoc.$set = { ...otherUpdates };
-    }
-
-    try {
-        const result = await roomsCollection.updateOne(filter, updateDoc);
-        res.send(result);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send({ message: "Update failed" });
-    }
-});
+//           const result = await roomsCollection.updateOne(filter, updateDoc);
+//           res.send(result);
+//       } catch (error) {
+//           console.error(error);
+//           res.status(500).send({ message: "Failed to update booking info" });
+//       }
+//   });
 
 
+        
+      app.patch("/rooms/:id", async (req, res) => {
+          try {
+              const id = req.params.id;
+              const { bookedDate, availability, bookedBy, email } =
+                  req.body;
+
+              const filter = { _id: id };
+              let updateDoc = {};
+
+              // Case 1: Cancel booking
+              if (
+                  availability === true &&
+                  bookedBy === null &&
+                  email === null
+              ) {
+                  updateDoc = {
+                      $set: {
+                          availability: true,
+                          bookedDate: null,
+                          bookedBy: null,
+                          email: null,
+                      },
+                  };
+              }
+
+              // Case 2: Update date only
+              else if (bookedDate) {
+                  updateDoc = {
+                      $set: { bookedDate }, // ✅ only bookedDate updated
+                  };
+              }
+
+              // Case 3: Add review
+             
+
+              // Default: update whatever fields came
+              else {
+                  updateDoc = {
+                      $set: {
+                          ...(availability !== undefined && { availability }),
+                          ...(bookedBy && { bookedBy }),
+                          ...(email && { email }),
+                          ...(bookedDate && { bookedDate }),
+                      },
+                  };
+              }
+
+              const result = await roomsCollection.updateOne(filter, updateDoc);
+              res.send(result);
+          } catch (error) {
+              console.error("Error updating booking:", error);
+              res.status(500).send({ message: "Update failed" });
+          }
+      });
+  
+        
+        
 
         // already have this probably
         app.get("/rooms/:id", async (req, res) => {
