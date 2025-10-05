@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config(); // ✅ Load environment variables
@@ -36,63 +37,26 @@ async function run() {
         const roomsCollection = db.collection("rooms");
         const usersCollection = db.collection("users");
 
-        // app.get("/rooms", async (req, res) => {
-        //     const cursor = roomsCollection.find();
-        //     const result = await cursor.toArray();
-        //     res.send(result);
-        // });
-
-        // Get all rooms (default, no sorting)
-// app.get("/rooms", async (req, res) => {
-//   try {
-//     const rooms = await roomsCollection.find().toArray();
-//     res.send(rooms);
-//   } catch (error) {
-//     console.error("Error fetching rooms:", error);
-//     res.status(500).send({ message: "Server error" });
-//   }
-// });
-
-
+        
 
 // app.get("/rooms", async (req, res) => {
 //   try {
-//     const order = req.query.order === "asc" ? 1 : -1;
-
-//     const rooms = await roomsCollection.aggregate([
-//       {
-//         $addFields: {
-//           averageRating: { $avg: "$reviews.rating" }
-//         }
-//       },
-//       {
-//         $sort: { averageRating: order }
-//       }
-//     ]).toArray();
-
-//     res.send(rooms);
-//   } catch (error) {
-//     console.error("Error fetching top-rated rooms:", error);
-//     res.status(500).send({ message: "Server error" });
-//   }
-// });
-
-
-// Get rooms with optional price filtering
-// app.get("/rooms", async (req, res) => {
-//   try {
-//     const { minPrice, maxPrice } = req.query;
-
+//     const { minPrice, maxPrice, sortOrder } = req.query;
+//     const limit = parseInt(req.query.limit) || 0
 //     let filter = {};
 
-//     // If minPrice or maxPrice provided, build a filter
 //     if (minPrice || maxPrice) {
 //       filter.pricePerNight = {};
 //       if (minPrice) filter.pricePerNight.$gte = parseInt(minPrice);
 //       if (maxPrice) filter.pricePerNight.$lte = parseInt(maxPrice);
 //     }
 
-//     const rooms = await roomsCollection.find(filter).toArray();
+//     // Determine sort
+//     let sort = {};
+//     if (sortOrder === "asc") sort.pricePerNight = 1; // low → high
+//     else if (sortOrder === "desc") sort.pricePerNight = -1; // high → low
+
+//     const rooms = await roomsCollection.find(filter).sort(sort).limit(limit).toArray();
 //     res.send(rooms);
 //   } catch (error) {
 //     console.error("Error fetching rooms:", error);
@@ -100,26 +64,34 @@ async function run() {
 //   }
 // });
 
-
 app.get("/rooms", async (req, res) => {
   try {
     const { minPrice, maxPrice, sortOrder } = req.query;
+    const page = parseInt(req.query.page) || 1;     // ✅ current page
+    const limit = parseInt(req.query.limit) || 6;   // ✅ items per page
+    const skip = (page - 1) * limit;
 
     let filter = {};
-
     if (minPrice || maxPrice) {
       filter.pricePerNight = {};
       if (minPrice) filter.pricePerNight.$gte = parseInt(minPrice);
       if (maxPrice) filter.pricePerNight.$lte = parseInt(maxPrice);
     }
 
-    // Determine sort
     let sort = {};
-    if (sortOrder === "asc") sort.pricePerNight = 1; // low → high
-    else if (sortOrder === "desc") sort.pricePerNight = -1; // high → low
+    if (sortOrder === "asc") sort.pricePerNight = 1;
+    else if (sortOrder === "desc") sort.pricePerNight = -1;
 
-    const rooms = await roomsCollection.find(filter).sort(sort).toArray();
-    res.send(rooms);
+    const rooms = await roomsCollection.find(filter).sort(sort).skip(skip).limit(limit).toArray();
+    const total = await roomsCollection.countDocuments(filter);
+
+    res.send({
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      data: rooms,
+    });
   } catch (error) {
     console.error("Error fetching rooms:", error);
     res.status(500).send({ message: "Server error" });
@@ -152,6 +124,26 @@ app.get("/rooms/top-rated", async (req, res) => {
   } catch (error) {
     console.error("Error fetching top-rated rooms:", error);
     res.status(500).send({ message: "Server error" });
+  }
+});
+
+// app.get('/rooms/reviews',async(req,res)=>{
+//     const result = roomsCollection.find().toArray()
+//     res.send(result)
+// })
+
+// Get 3 reviews across all rooms
+app.get("/reviews", async (req, res) => {
+  try {
+    const reviews = await roomsCollection.aggregate([
+      { $unwind: "$reviews" },        // flatten reviews array
+      { $limit: 3 },                  // take only 3
+    ]).toArray();
+
+    res.send(reviews.map(r => r.reviews)); // send only review objects
+  } catch (error) {
+    console.error("Error fetching reviews:", error);
+    res.status(500).send({ error: "Internal server error" });
   }
 });
 
@@ -302,18 +294,6 @@ app.get("/rooms/top-rated", async (req, res) => {
     }
 }
 run().catch(console.dir);
-
-
-
-
-
-
-
-
-
-
-
-
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
