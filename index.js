@@ -111,7 +111,7 @@ app.get("/rooms/top-rated", async (req, res) => {
         $addFields: {
           averageRating: { $avg: "$reviews.rating" }
         }
-      },
+      },    
       {
         $sort: { averageRating: -1 } // highest first
       },
