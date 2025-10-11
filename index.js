@@ -16,8 +16,11 @@ app.get("/", (req, res) => {
     res.send("Server is running");
 });
 
+const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
 
-const serviceAccount = require("./modern-hotel-booking-firebase-admin-key.json");
+const serviceAccount = JSON.parse(
+  Buffer.from(serviceAccountBase64, "base64").toString("utf8")
+);
 
 const admin = require("firebase-admin");
 
