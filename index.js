@@ -171,31 +171,38 @@ app.get("/reviews", async (req, res) => {
 });
 
 
-        app.get("/rooms/:id", async (req, res) => {
-            const id = req.params.id;
-            const result = await roomsCollection.findOne({ _id: id});
-            res.send(result);
-        });
+        app.get("/rooms/:id", verifyToken, emailVerify, async (req, res) => {
+  const id = req.params.id;
+  // const email = req.user.email;
 
-        app.get("/my-booking",verifyToken, emailVerify, async (req, res) => {
-            try {
-                const email = req.query.email; // get email from query string
-                if (!email) {
-                    return res
-                        .status(400)
-                        .send({ message: "Email is required" });
-                }
+  const room = await roomsCollection.findOne({ _id: id });
+  if (!room) return res.status(404).send({ message: "Room not found" });
 
-                // Filter rooms by this user's email
-                const query = { email: email };
-                const result = await roomsCollection.find(query).toArray();
+  // If the room is booked by someone else, hide their details
+  // if (room.bookedBy && room.bookedBy !== email) {
+  //   // delete room.bookedBy;
+  //   // delete room.email;
+  //   // delete room.bookedDate;
+  // }
 
-                res.send(result);
-            } catch (error) {
-                console.error(error);
-                res.status(500).send({ message: "Server Error" });
-            }
-        });
+  res.send(room);
+});
+
+
+       app.get("/my-booking", verifyToken, emailVerify, async (req, res) => {
+  try {
+    const email = req.user.email; // ✅ from verified token
+
+    const result = await roomsCollection.find({ email }).toArray();
+    res.send(result);
+
+  } catch (error) {
+    console.error("Error fetching my bookings:", error);
+    res.status(500).send({ message: "Server Error" });
+  }
+});
+
+
 
         app.post("/rooms/review/:id", async (req, res) => {
             try {
@@ -227,14 +234,20 @@ app.get("/reviews", async (req, res) => {
         });
 
 
-        app.patch("/rooms/:id", async (req, res) => {
+        app.patch("/rooms/:id", verifyToken, emailVerify, async (req, res) => {
   try {
     const id = req.params.id;
+    const userEmail = req.user.email;
     const { bookedDate, availability, bookedBy, email } = req.body;
 
-    const filter = { _id: id };
+    const room = await roomsCollection.findOne({ _id: id });
+    if (!room) return res.status(404).send({ message: "Room not found" });
 
-    // Build $set object dynamically
+    // Only the person who booked it (or admin) can update
+    if (room.email && room.email !== userEmail) {
+      return res.status(403).send({ message: "Unauthorized to modify this booking" });
+    }
+
     const updateFields = {};
     if (availability !== undefined) updateFields.availability = availability;
     if (bookedBy !== undefined) updateFields.bookedBy = bookedBy;
@@ -242,7 +255,7 @@ app.get("/reviews", async (req, res) => {
     if (bookedDate !== undefined) updateFields.bookedDate = bookedDate;
 
     const result = await roomsCollection.updateOne(
-      filter,
+      { _id: id },
       { $set: updateFields }
     );
 
@@ -252,6 +265,7 @@ app.get("/reviews", async (req, res) => {
     res.status(500).send({ message: "Update failed" });
   }
 });
+
 
 
         app.post("/users", async (req, res) => {
