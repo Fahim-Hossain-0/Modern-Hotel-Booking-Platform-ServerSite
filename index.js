@@ -17,6 +17,53 @@ app.get("/", (req, res) => {
 });
 
 
+const serviceAccount = require("./modern-hotel-booking-firebase-admin-key.json");
+
+const admin = require("firebase-admin");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized: No token" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken; // Attach user data to request
+    next();
+  } catch (error) {
+    return res.status(403).json({ message: "Invalid token", error: error.message });
+  }
+};
+
+module.exports = verifyToken;
+
+// emailVerify.js (or just place this below verifyToken)
+const emailVerify = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "Unauthorized: No user data found" });
+  }
+
+  if (!req.user.email_verified) {
+    return res.status(403).json({ message: "Please verify your email address before accessing this resource" });
+  }
+
+  next(); // proceed if verified
+};
+
+module.exports = emailVerify;
+
+
+
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -39,30 +86,6 @@ async function run() {
 
         
 
-// app.get("/rooms", async (req, res) => {
-//   try {
-//     const { minPrice, maxPrice, sortOrder } = req.query;
-//     const limit = parseInt(req.query.limit) || 0
-//     let filter = {};
-
-//     if (minPrice || maxPrice) {
-//       filter.pricePerNight = {};
-//       if (minPrice) filter.pricePerNight.$gte = parseInt(minPrice);
-//       if (maxPrice) filter.pricePerNight.$lte = parseInt(maxPrice);
-//     }
-
-//     // Determine sort
-//     let sort = {};
-//     if (sortOrder === "asc") sort.pricePerNight = 1; // low → high
-//     else if (sortOrder === "desc") sort.pricePerNight = -1; // high → low
-
-//     const rooms = await roomsCollection.find(filter).sort(sort).limit(limit).toArray();
-//     res.send(rooms);
-//   } catch (error) {
-//     console.error("Error fetching rooms:", error);
-//     res.status(500).send({ message: "Server error" });
-//   }
-// });
 
 app.get("/rooms", async (req, res) => {
   try {
@@ -150,11 +173,11 @@ app.get("/reviews", async (req, res) => {
 
         app.get("/rooms/:id", async (req, res) => {
             const id = req.params.id;
-            const result = await roomsCollection.findOne({ _id: id });
+            const result = await roomsCollection.findOne({ _id: id});
             res.send(result);
         });
 
-        app.get("/my-booking", async (req, res) => {
+        app.get("/my-booking",verifyToken, emailVerify, async (req, res) => {
             try {
                 const email = req.query.email; // get email from query string
                 if (!email) {
@@ -205,56 +228,31 @@ app.get("/reviews", async (req, res) => {
 
 
         app.patch("/rooms/:id", async (req, res) => {
-            try {
-                const id = req.params.id;
-                const { bookedDate, availability, bookedBy, email } =
-                    req.body;
+  try {
+    const id = req.params.id;
+    const { bookedDate, availability, bookedBy, email } = req.body;
 
-                const filter = { _id: id };
-                let updateDoc = {};
+    const filter = { _id: id };
 
-                
-                if (
-                    availability === true &&
-                    bookedBy === null &&
-                    email === null
-                ) {
-                    updateDoc = {
-                        $set: {
-                            availability: true,
-                            bookedDate: null,
-                            bookedBy: null,
-                            email: null,
-                        },
-                    };
-                }
+    // Build $set object dynamically
+    const updateFields = {};
+    if (availability !== undefined) updateFields.availability = availability;
+    if (bookedBy !== undefined) updateFields.bookedBy = bookedBy;
+    if (email !== undefined) updateFields.email = email;
+    if (bookedDate !== undefined) updateFields.bookedDate = bookedDate;
 
-                // Case 2: Update date only
-                else if (bookedDate) {
-                    updateDoc = {
-                        $set: { bookedDate }, 
-                    };
-                }
+    const result = await roomsCollection.updateOne(
+      filter,
+      { $set: updateFields }
+    );
 
-               
-                else {
-                    updateDoc = {
-                        $set: {
-                            ...(availability !== undefined && { availability }),
-                            ...(bookedBy && { bookedBy }),
-                            ...(email && { email }),
-                            ...(bookedDate && { bookedDate }),
-                        },
-                    };
-                }
+    res.send(result);
+  } catch (error) {
+    console.error("Error updating booking:", error);
+    res.status(500).send({ message: "Update failed" });
+  }
+});
 
-                const result = await roomsCollection.updateOne(filter, updateDoc);
-                res.send(result);
-            } catch (error) {
-                console.error("Error updating booking:", error);
-                res.status(500).send({ message: "Update failed" });
-            }
-        });
 
         app.post("/users", async (req, res) => {
             const user = req.body;
@@ -282,12 +280,12 @@ app.get("/reviews", async (req, res) => {
         });
 
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log(
-            "Pinged your deployment. You successfully connected to MongoDB!"
-        );
+        // await client.db("admin").command({ ping: 1 });
+        // console.log(
+        //     "Pinged your deployment. You successfully connected to MongoDB!"
+        // );
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
